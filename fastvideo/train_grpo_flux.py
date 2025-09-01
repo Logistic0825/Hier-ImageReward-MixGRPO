@@ -9,6 +9,9 @@
 #
 # This modified file is released under the same license.
 
+# compute_reward 接收参数添加了 index, len(batch_indices) 也就是当前的batch index，和每次扩散的总batch，用来近似 curr_step 和 total_step_per_diffusion
+
+
 import argparse
 import math
 import os
@@ -288,6 +291,9 @@ def sample_reference_model(
                 prompts,
                 reward_models,
                 reward_weights,
+                # 新增：当前去噪batch index，和batch总数，方便给他按照时间给不同权重
+                curr_step=index,
+                total_steps=len(batch_indices)
             )
             if args.multi_reward_mix == "reward_aggr":
                 all_rewards.append(torch.tensor(rewards, device=device, dtype=torch.float32))

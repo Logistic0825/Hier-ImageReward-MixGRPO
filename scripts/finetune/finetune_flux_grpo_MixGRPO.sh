@@ -47,7 +47,8 @@ data_json_path="data/rl_embeddings/prompt.json"
 
 # MixGRPO Hyperparameters
 experiment_name="0714_test"
-reward_model="multi_reward" # "hpsv2", "clip_score" "image_reward", "pick_score", "unified_reward", "hpsv2_clip_score", "multi_reward"
+# reward_model="multi_reward" # "hpsv2", "clip_score" "image_reward", "pick_score", "unified_reward", "hpsv2_clip_score", "multi_reward"
+reward_model="image_reward" # "hpsv2", "clip_score" "image_reward", "pick_score", "unified_reward", "hpsv2_clip_score", "multi_reward"
 seed=714
 sampler_seed=7144
 training_strategy="part" # "part", "all"

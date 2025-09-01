@@ -1,7 +1,7 @@
 import concurrent.futures
 import random
 
-def _compute_single_reward(reward_model, images, input_prompts):
+def _compute_single_reward(reward_model, images, input_prompts, curr_step, total_steps):
     """Compute reward for a single reward model."""
     reward_model_name = type(reward_model).__name__
     try:
@@ -13,8 +13,9 @@ def _compute_single_reward(reward_model, images, input_prompts):
             rewards = reward_model(input_prompts, images)
             successes = [1] * len(rewards)
 
+        # 目前根据时间计算中间的rm只支持ImageReward
         elif reward_model_name == 'ImageRewardModel':
-            rewards = reward_model(images, input_prompts)
+            rewards = reward_model(images, input_prompts, curr_step, total_steps)
             successes = [1] * len(rewards)
 
         elif reward_model_name == 'UnifiedRewardModel':
@@ -40,7 +41,7 @@ def _compute_single_reward(reward_model, images, input_prompts):
     except Exception as e:
         raise ValueError(f"Error in _compute_single_reward with {reward_model_name}: {e}") from e
 
-def compute_reward(images, input_prompts, reward_models, reward_weights):
+def compute_reward(images, input_prompts, reward_models, reward_weights, curr_step, total_steps):
         assert (
             len(images) == len(input_prompts)
         ), f"length of `images` ({len(images)}) must be equal to length of `input_prompts` ({len(input_prompts)})"
@@ -53,7 +54,7 @@ def compute_reward(images, input_prompts, reward_models, reward_weights):
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(reward_models)) as executor:
             # Submit all reward computation tasks
             future_to_model = {
-                executor.submit(_compute_single_reward, reward_model, images, input_prompts): reward_model 
+                executor.submit(_compute_single_reward, reward_model, images, input_prompts, curr_step, total_steps): reward_model 
                 for reward_model in reward_models
             }
             
