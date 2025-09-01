@@ -1,5 +1,3 @@
-<div align="center" style="font-family: charter;">
-
 <h1>对原始代码修改点</h1>
 
 1. scripts/finetune/finetune_flux_grpo_MixGRPO.sh
@@ -128,6 +126,10 @@ rewards, successes, rewards_dict, successes_dict = compute_reward(
     total_steps=len(batch_indices)
 )
 ```
+
+
+<div align="center" style="font-family: charter;">
+
 
 
 <h1>MixGRPO:</br>Unlocking Flow-based GRPO Efficiency with Mixed ODE-SDE</h1>
