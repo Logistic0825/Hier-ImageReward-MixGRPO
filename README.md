@@ -1,5 +1,7 @@
 <h1>对原始代码修改点</h1>
 
+0. main分支的好像有点问题，他没有在去噪的时候逐步计算RM score，我新建了一个分支 stepupdate， 改了这个
+
 1. scripts/finetune/finetune_flux_grpo_MixGRPO.sh
 
 reward_model="multi_reward" # "hpsv2", "clip_score" "image_reward", "pick_score", "unified_reward", "hpsv2_clip_score", "multi_reward"
