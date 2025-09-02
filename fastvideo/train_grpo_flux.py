@@ -207,7 +207,7 @@ def sample_reference_model(
 
     all_latents = []
     all_log_probs = []
-    all_rewards = []  
+    all_step_rewards = []  # 新增：存储每个步骤的奖励
     all_multi_rewards = {}
     all_image_ids = []
     if args.init_same_noise:
@@ -269,58 +269,70 @@ def sample_reference_model(
         image_processor = VaeImageProcessor(16)
         rank = int(os.environ["RANK"])
 
+        # 新增：计算每个步骤的奖励
+        batch_step_rewards = []
+        num_steps = batch_latents.shape[1] - 1  # 总步骤数
         
         with torch.inference_mode():
             with torch.autocast("cuda", dtype=torch.bfloat16):
-                latents = unpack_latents(latents, h, w, 8)
-                latents = (latents / 0.3611) + 0.1159
-                image = vae.decode(latents, return_dict=False)[0]
-                decoded_image = image_processor.postprocess(
-                image)
+                # 遍历每个去噪步骤计算奖励
+                for step_idx in range(num_steps):
+                    # 获取当前步骤的latent
+                    curr_latent = batch_latents[:, step_idx]
+                    
+                    # 解码当前步骤的latent
+                    curr_latent_unpacked = unpack_latents(curr_latent, h, w, 8)
+                    curr_latent_unpacked = (curr_latent_unpacked / 0.3611) + 0.1159
+                    curr_image = vae.decode(curr_latent_unpacked, return_dict=False)[0]
+                    decoded_image = image_processor.postprocess(curr_image)
+                    
+                    # 计算当前步骤的奖励，传入当前步骤和总步骤
+                    images = [decoded_image[0]]
+                    prompts = [batch_caption[0]]
+                    rewards, successes, rewards_dict, successes_dict = compute_reward(
+                        images, 
+                        prompts,
+                        reward_models,
+                        reward_weights,
+                        curr_step=step_idx,  # 当前步骤
+                        total_steps=num_steps  # 总步骤
+                    )
+                    
+                    # 存储当前步骤的奖励
+                    batch_step_rewards.append(torch.tensor(rewards, device=device, dtype=torch.float32))
+            
+            # 堆叠该批次所有步骤的奖励
+            batch_step_rewards = torch.stack(batch_step_rewards, dim=1)
+            all_step_rewards.append(batch_step_rewards)
+
+        # 保存最终图像
+        with torch.inference_mode():
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                final_latent = unpack_latents(latents, h, w, 8)
+                final_latent = (final_latent / 0.3611) + 0.1159
+                final_image = vae.decode(final_latent, return_dict=False)[0]
+                final_decoded_image = image_processor.postprocess(final_image)
+        
         image_dir = f"{args.output_dir}/{args.training_strategy}_{args.experiment_name}/images"
         os.makedirs(image_dir, exist_ok=True)
         if index == 0:
-            decoded_image[0].save(f"{image_dir}/flux_{global_step}_{rank}.png")
+            final_decoded_image[0].save(f"{image_dir}/flux_{global_step}_{rank}.png")
 
-        # compute rewards
-        with torch.no_grad():
-            images = [decoded_image[0]]
-            prompts = [batch_caption[0]]
-            rewards, successes, rewards_dict, successes_dict = compute_reward(
-                images, 
-                prompts,
-                reward_models,
-                reward_weights,
-                # 新增：当前去噪batch index，和batch总数，方便给他按照时间给不同权重
-                curr_step=index,
-                total_steps=len(batch_indices)
-            )
-            if args.multi_reward_mix == "reward_aggr":
-                all_rewards.append(torch.tensor(rewards, device=device, dtype=torch.float32))
-            elif args.multi_reward_mix == "advantage_aggr":
-                for model_name, model_rewards in rewards_dict.items():
-                    if model_name not in all_multi_rewards:
-                        all_multi_rewards[model_name] = {"rewards": [], "successes": []}
-                    all_multi_rewards[model_name]["rewards"].append(
-                        torch.tensor(model_rewards, device=device, dtype=torch.float32)
-                    )
-                    all_multi_rewards[model_name]["successes"].append(
-                        torch.tensor(successes_dict[model_name], device=device, dtype=torch.float32)
-                    )
-
-    # TODO: add the logic code for verifying success
+    # 处理所有步骤的奖励
     all_latents = torch.cat(all_latents, dim=0)
     all_log_probs = torch.cat(all_log_probs, dim=0)
+    all_step_rewards = torch.cat(all_step_rewards, dim=0)  # 合并所有批次的步骤奖励
+    
+    # 根据奖励混合策略处理奖励
     if args.multi_reward_mix == "reward_aggr":
-        all_rewards_res = torch.cat(all_rewards, dim=0)
+        all_rewards_res = all_step_rewards
     elif args.multi_reward_mix == "advantage_aggr":
         all_rewards_res = {}
+        # 这里假设多奖励情况也需要按步骤处理，具体实现根据实际情况调整
         for model_name, model_rewards in all_multi_rewards.items():
             all_rewards_res[model_name] = torch.cat(model_rewards["rewards"], dim=0)
-    all_image_ids = torch.stack(all_image_ids, dim=0)
     
     return all_rewards_res, all_latents, all_log_probs, sigma_schedule, all_image_ids
-
 
 def gather_tensor(tensor):
     if not dist.is_initialized():
@@ -366,7 +378,6 @@ def train_one_step(
         encoder_hidden_states = repeat_tensor(encoder_hidden_states)
         pooled_prompt_embeds = repeat_tensor(pooled_prompt_embeds)
         text_ids = repeat_tensor(text_ids)
-
 
         if isinstance(caption, str):
             caption = [caption] * args.num_generations
