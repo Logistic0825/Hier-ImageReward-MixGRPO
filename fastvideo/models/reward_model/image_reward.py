@@ -115,9 +115,9 @@ class ImageRewardModel(object):
                 _, reward_clip = self.clip_rm.inference_rank(text, [img_path])
                 _, reward_aes = self.aesthtic_rm.inference_rank(text, [img_path])
                 
-                combined_reward = (blip_weight * reward_blip[0] + 
-                                clip_weight * reward_clip[0] + 
-                                aesthetic_weight * reward_aes[0])
+                combined_reward = (blip_weight * reward_blip + 
+                                clip_weight * reward_clip + 
+                                aesthetic_weight * reward_aes)
                 
                 rewards.append(combined_reward)
 
