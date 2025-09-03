@@ -100,10 +100,10 @@ class ImageRewardModel(object):
         
         rewards = []
         # 生成唯一时间戳（精确到毫秒）
-        import datetime
+        import time
         import tempfile
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")[:-3]
-
+        timestamp = time.time()
+        
         with tempfile.TemporaryDirectory() as tmpdir:
             for idx, (image, text) in enumerate(zip(images, texts)):
                 # 文件名格式：时间戳_索引.png（确保唯一）
