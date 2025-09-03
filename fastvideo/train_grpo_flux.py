@@ -184,6 +184,8 @@ def sample_reference_model(
     timesteps_train, # index
     global_step, 
     reward_weights,
+    curr_step,
+    total_step
 ):
     w, h, t = args.w, args.h, args.t
     sample_steps = args.sampling_steps
@@ -292,8 +294,8 @@ def sample_reference_model(
                 reward_models,
                 reward_weights,
                 # 新增：当前去噪batch index，和batch总数，方便给他按照时间给不同权重
-                curr_step=index,
-                total_steps=len(batch_indices)
+                curr_step=curr_step,
+                total_steps=total_step,
             )
             if args.multi_reward_mix == "reward_aggr":
                 all_rewards.append(torch.tensor(rewards, device=device, dtype=torch.float32))
@@ -344,6 +346,8 @@ def train_one_step(
     timesteps_train, # index
     global_step,
     reward_weights,
+    curr_step,
+    total_step
 ):
     total_loss = 0.0
     kl_total_loss = 0.0
@@ -388,6 +392,8 @@ def train_one_step(
             timesteps_train,
             global_step,
             reward_weights,
+            curr_step,
+            total_step
         )
     batch_size = all_latents.shape[0]
     timestep_value = [int(sigma * 1000) for sigma in sigma_schedule][:args.sampling_steps]
@@ -968,6 +974,9 @@ def main(args):
                 timesteps_train,
                 global_step,
                 reward_weights,
+                # 新增，改成每个epoch，权重线性变化，每个epoch前期训练CLIP，BLIPScore，后期重点训练AestheticScore
+                step,
+                args.max_train_steps
             )
     
             step_time = time.time() - start_time

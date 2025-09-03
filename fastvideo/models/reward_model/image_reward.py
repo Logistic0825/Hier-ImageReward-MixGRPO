@@ -99,20 +99,26 @@ class ImageRewardModel(object):
         blip_weight, clip_weight, aesthetic_weight = weights
         
         rewards = []
-        for image, text in zip(images, texts):
-            # ranking, reward = self.model.inference_rank(text, [image])
-            # 修改：使用3个细粒度的RM 计算reward，排序
-            # BLIP更注重图像和文本的语义匹配度
-            _, reward_blip = self.blip_rm.inference_rank(text, [image])
-            # CLIP更注重图像和文本的细节对齐
-            _, reward_clip = self.clip_rm.inference_rank(text, [image])
-            # Aesthetic更注重图像的美学质量
-            _, reward_aes = self.aesthtic_rm.inference_rank(text, [image])
-            
-            # 加权得到综合奖励分数
-            combined_reward = (blip_weight * reward_blip[0] + 
-                               clip_weight * reward_clip[0] + 
-                               aesthetic_weight * reward_aes[0])
-            
-            rewards.append(combined_reward)
+        # 生成唯一时间戳（精确到毫秒）
+        import time
+        import tempfile
+        timestamp = time.time()
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for idx, (image, text) in enumerate(zip(images, texts)):
+                # 文件名格式：时间戳_索引.png（确保唯一）
+                img_path = os.path.join(tmpdir, f"img_{timestamp}_{idx}.png")
+                image.save(img_path, format="PNG")  # 保存PIL对象到临时路径
+                
+                # 后续评分逻辑不变，使用img_path作为图像输入
+                _, reward_blip = self.blip_rm.inference_rank(text, [img_path])
+                _, reward_clip = self.clip_rm.inference_rank(text, [img_path])
+                _, reward_aes = self.aesthtic_rm.inference_rank(text, [img_path])
+                
+                combined_reward = (blip_weight * reward_blip[0] + 
+                                clip_weight * reward_clip[0] + 
+                                aesthetic_weight * reward_aes[0])
+                
+                rewards.append(combined_reward)
+
         return rewards
