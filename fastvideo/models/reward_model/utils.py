@@ -41,6 +41,45 @@ def _compute_single_reward(reward_model, images, input_prompts, curr_step, total
     except Exception as e:
         raise ValueError(f"Error in _compute_single_reward with {reward_model_name}: {e}") from e
 
+def _compute_single_reward_eval(reward_model, images, input_prompts):
+    """Compute reward for a single reward model."""
+    reward_model_name = type(reward_model).__name__
+    try:
+        if reward_model_name == 'HPSClipRewardModel':
+            rewards = reward_model(images, input_prompts)
+            successes = [1] * len(rewards)
+        
+        elif reward_model_name == 'CLIPScoreRewardModel':
+            rewards = reward_model(input_prompts, images)
+            successes = [1] * len(rewards)
+
+        elif reward_model_name == 'ImageRewardModel':
+            rewards = reward_model(images, input_prompts)
+            successes = [1] * len(rewards)
+
+        elif reward_model_name == 'UnifiedRewardModel':
+            rewards, successes_bool = reward_model(images, input_prompts)
+            rewards = [float(reward) if success else 0.0 for reward, success in zip(rewards, successes_bool)]
+            successes = [1 if success else 0 for success in successes_bool]
+
+        elif reward_model_name == 'PickScoreRewardModel':
+            rewards = reward_model(images, input_prompts)
+            successes = [1] * len(rewards)
+
+        else:
+            raise ValueError(f"Unknown reward model: {reward_model_name}")
+
+        # Verify the length of results matches input
+        assert len(rewards) == len(input_prompts), \
+            f"Length mismatch in {reward_model_name}: rewards ({len(rewards)}) != input_prompts ({len(input_prompts)})"
+        assert len(successes) == len(input_prompts), \
+            f"Length mismatch in {reward_model_name}: successes ({len(successes)}) != input_prompts ({len(input_prompts)})"
+
+        return rewards, successes
+
+    except Exception as e:
+        raise ValueError(f"Error in _compute_single_reward with {reward_model_name}: {e}") from e
+
 def compute_reward(images, input_prompts, reward_models, reward_weights, curr_step, total_steps):
         assert (
             len(images) == len(input_prompts)
@@ -107,7 +146,7 @@ def compute_reward_eval(images, input_prompts, reward_models, reward_weights):
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(reward_models)) as executor:
             # Submit all reward computation tasks
             future_to_model = {
-                executor.submit(_compute_single_reward, reward_model, images, input_prompts): reward_model 
+                executor.submit(_compute_single_reward_eval, reward_model, images, input_prompts): reward_model 
                 for reward_model in reward_models
             }
             
