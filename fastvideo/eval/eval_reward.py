@@ -13,12 +13,12 @@ import argparse
 from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import copy
-from fastvideo.models.reward_model.image_reward import ImageRewardModel
+from fastvideo.models.reward_model.image_reward_eval import ImageRewardModel
 from fastvideo.models.reward_model.pick_score import PickScoreRewardModel
 from fastvideo.models.reward_model.unified_reward import UnifiedRewardModel
 from fastvideo.models.reward_model.hps_score import HPSClipRewardModel
 from fastvideo.models.reward_model.clip_score import CLIPScoreRewardModel
-from fastvideo.models.reward_model.utils import compute_reward
+from fastvideo.models.reward_model.utils import compute_reward_eval
 from PIL import Image
 import json
 from tqdm import tqdm
@@ -161,7 +161,7 @@ def main(args):
         prompt = args.single_img_prompt
         img_pil = Image.open(args.single_img).convert("RGB")
 
-        _, _, rewards_dict, _ = compute_reward(
+        _, _, rewards_dict, _ = compute_reward_eval(
             images=[img_pil],
             input_prompts=[prompt],
             reward_models=reward_models,
@@ -202,7 +202,7 @@ def main(args):
 
             img_pil = [Image.open(p).convert("RGB") for p in img]
             
-            _, merged_successes, rewards_dict, _ = compute_reward(
+            _, merged_successes, rewards_dict, _ = compute_reward_eval(
                 images=img_pil,
                 input_prompts=prompt,
                 reward_models=reward_models,

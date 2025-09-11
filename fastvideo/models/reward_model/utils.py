@@ -93,6 +93,60 @@ def compute_reward(images, input_prompts, reward_models, reward_weights, curr_st
 
         return merged_rewards, merged_successes, rewards_dict, successes_dict
 
+
+def compute_reward_eval(images, input_prompts, reward_models, reward_weights):
+        assert (
+            len(images) == len(input_prompts)
+        ), f"length of `images` ({len(images)}) must be equal to length of `input_prompts` ({len(input_prompts)})"
+        
+        # Initialize results
+        rewards_dict = {}
+        successes_dict = {}
+        
+        # Create a thread pool for parallel reward computation
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(reward_models)) as executor:
+            # Submit all reward computation tasks
+            future_to_model = {
+                executor.submit(_compute_single_reward, reward_model, images, input_prompts): reward_model 
+                for reward_model in reward_models
+            }
+            
+            # Process results as they complete
+            for future in concurrent.futures.as_completed(future_to_model):
+                reward_model = future_to_model[future]
+                model_name = type(reward_model).__name__
+                try:
+                    model_rewards, model_successes = future.result()
+                    rewards_dict[model_name] = model_rewards
+                    successes_dict[model_name] = model_successes
+                except Exception as e:
+                    print(f"Error computing reward with {model_name}: {e}")
+                    rewards_dict[model_name] = [0.0] * len(input_prompts)
+                    successes_dict[model_name] = [0] * len(input_prompts)
+                    continue
+
+        # Merge rewards based on weights
+        merged_rewards = [0.0] * len(input_prompts)
+        merged_successes = [0] * len(input_prompts)
+        
+        # First check if all models are successful for each sample
+        for i in range(len(merged_rewards)):
+            all_success = True
+            for model_name in reward_weights.keys():
+                if model_name in successes_dict and successes_dict[model_name][i] != 1:
+                    all_success = False
+                    break
+            
+            if all_success:
+                # Only compute weighted sum if all models are successful
+                for model_name, weight in reward_weights.items():
+                    if model_name in rewards_dict:
+                        merged_rewards[i] += rewards_dict[model_name][i] * weight
+                merged_successes[i] = 1
+
+        return merged_rewards, merged_successes, rewards_dict, successes_dict
+
+
 def balance_pos_neg(samples, use_random=False):
     """Balance positive and negative samples distribution in the samples list."""
     if use_random:
